@@ -25,7 +25,7 @@ def _arg_parser():
 
 def main():
     parser = _arg_parser()
-
+    # TODO: Adapt parser so if there are two or more arguments it calls normalize_batch
     try:
         args = parser.parse_args()
     except IOError as error:

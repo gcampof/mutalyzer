@@ -20,6 +20,25 @@ def normalize(description, only_variants=False, sequence=None):
     return output
 
 
+def normalize_batch(descriptions, only_variants=False, sequence=None):
+    """
+    Normalize a batch of descriptions efficiently by caching reference models
+    that are commonly used by other variants with the same transcript.
+    """
+    results = []
+    for description in descriptions:
+        d = Description(
+            description=description,
+            only_variants=only_variants,
+            sequence=sequence,
+        )
+        d.normalize()
+        d.get_chromosomal_descriptions()
+        results.append(d.output())
+
+    return results
+
+
 def delins_model(description, only_variants=False, sequence=None):
     d = Description(
         description=description,

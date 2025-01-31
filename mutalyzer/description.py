@@ -105,13 +105,14 @@ from .util import (
 
 
 class Description(object):
+    reference_dict = {}  # Class-level cache for reference models
     def __init__(
-        self,
-        description=None,
-        description_model=None,
-        only_variants=False,
-        sequence=None,
-        stop_on_error=False,
+            self,
+            description=None,
+            description_model=None,
+            only_variants=False,
+            sequence=None,
+            stop_on_error=False,
     ):
 
         self.stop_on_errors = stop_on_error
@@ -174,9 +175,9 @@ class Description(object):
     def is_selector_model_valid(self):
         selector_model = self.get_selector_model()
         if (
-            selector_model
-            and selector_model["type"] == "mRNA"
-            and selector_model.get("cds")
+                selector_model
+                and selector_model["type"] == "mRNA"
+                and selector_model.get("cds")
         ):
             return True
         return False
@@ -184,9 +185,9 @@ class Description(object):
     def is_inverted(self):
         selector_model = self.get_selector_model()
         if (
-            selector_model
-            and selector_model.get("location")
-            and selector_model["location"].get("strand") == -1
+                selector_model
+                and selector_model.get("location")
+                and selector_model["location"].get("strand") == -1
         ):
             return True
         return False
@@ -256,39 +257,46 @@ class Description(object):
             return
         if self.only_variants and self.sequence:
             self.references["reference"] = {"sequence": {"seq": self.sequence}}
+
         for reference_id, path in yield_reference_ids(self.corrected_model):
             selector_id = get_selector_id(
                 get_submodel_by_path(self.corrected_model, path[:-2])
             )
-            reference_model = retrieve_reference(reference_id, selector_id)[0]
-            if reference_model is None:
-                lrg = self._check_if_lrg_reference(reference_id)
-                if lrg:
-                    reference_model = retrieve_reference(lrg["id"])[0]
-                    if reference_model:
-                        self._correct_lrg_reference_id(reference_id, lrg, path)
-                        reference_id = lrg["id"]
-            if reference_model is None:
-                self._add_error(errors.reference_not_retrieved(reference_id, [path]))
+            # Check if the reference model is already cached
+            if reference_id in Description.reference_dict:
+                reference_model = Description.reference_dict[reference_id]
             else:
-                reference_id_in_model = get_reference_id_from_model(reference_model)
-                if reference_id_in_model != reference_id:
-                    self._correct_reference_id(
-                        path, reference_id, reference_id_in_model
-                    )
-                    _update_references(reference_id_in_model, reference_model)
-                    ref_id = reference_id_in_model
-                else:
-                    _update_references(reference_id, reference_model)
-                    ref_id = reference_id
-                if ref_id.startswith("LRG_"):
-                    self.add_info(infos.lrg_warning(ref_id, path))
-                self._set_main_reference()
+                reference_model = retrieve_reference(reference_id, selector_id)[0]
+                if reference_model:
+                    Description.reference_dict[reference_id] = reference_model  # Cache it
+        if reference_model is None:
+            lrg = self._check_if_lrg_reference(reference_id)
+            if lrg:
+                reference_model = retrieve_reference(lrg["id"])[0]
+                if reference_model:
+                    self._correct_lrg_reference_id(reference_id, lrg, path)
+                    reference_id = lrg["id"]
+        if reference_model is None:
+            self._add_error(errors.reference_not_retrieved(reference_id, [path]))
+        else:
+            reference_id_in_model = get_reference_id_from_model(reference_model)
+            if reference_id_in_model != reference_id:
+                self._correct_reference_id(
+                    path, reference_id, reference_id_in_model
+                )
+                _update_references(reference_id_in_model, reference_model)
+                ref_id = reference_id_in_model
+            else:
+                _update_references(reference_id, reference_model)
+                ref_id = reference_id
+            if ref_id.startswith("LRG_"):
+                self.add_info(infos.lrg_warning(ref_id, path))
+            self._set_main_reference()
 
     @check_errors
     def _check_selectors_in_references(self):
         for reference_id, selector_id, path in yield_reference_selector_ids(
-            self.corrected_model
+                self.corrected_model
         ):
             if not is_selector_in_reference(selector_id, self.references[reference_id]):
                 self.handle_selector_not_found(reference_id, selector_id, path)
@@ -351,12 +359,12 @@ class Description(object):
     @check_errors
     def _check_coordinate_systems(self):
         for (
-            c_s,
-            c_s_path,
-            r_id,
-            r_path,
-            s_id,
-            s_path,
+                c_s,
+                c_s_path,
+                r_id,
+                r_path,
+                s_id,
+                s_path,
         ) in yield_reference_selector_ids_coordinate_system(
             copy.deepcopy(self.corrected_model)
         ):
@@ -394,12 +402,12 @@ class Description(object):
     @check_errors
     def _check_coordinate_system_consistency(self):
         for (
-            c_s,
-            c_s_path,
-            r_id,
-            r_path,
-            s_id,
-            s_path,
+                c_s,
+                c_s_path,
+                r_id,
+                r_path,
+                s_id,
+                s_path,
         ) in yield_reference_selector_ids_coordinate_system(
             copy.deepcopy(self.corrected_model)
         ):
@@ -408,8 +416,8 @@ class Description(object):
                     self.references[r_id], s_id
                 )
                 if c_s_s != c_s and not (
-                    (c_s_s == "c" and c_s in ["n", "r", "p"])
-                    or (c_s_s == "n" and c_s == "r")
+                        (c_s_s == "c" and c_s in ["n", "r", "p"])
+                        or (c_s_s == "n" and c_s == "r")
                 ):
                     self._add_error(
                         errors.coordinate_system_mismatch(c_s, s_id, c_s_s, c_s_path)
@@ -417,7 +425,7 @@ class Description(object):
             else:
                 r_c_s = get_coordinate_system_from_reference(self.references[r_id])
                 if (r_c_s == "n" and c_s in ["c", "g", "m"]) or (
-                    r_c_s == "c" and c_s in ["g", "m"]
+                        r_c_s == "c" and c_s in ["g", "m"]
                 ):
                     self._add_error(
                         errors.coordinate_system_mismatch(c_s, r_id, r_c_s, c_s_path)
@@ -443,17 +451,17 @@ class Description(object):
     @check_errors
     def _check_selector_models(self):
         for reference_id, selector_id, path in yield_reference_selector_ids(
-            self.corrected_model
+                self.corrected_model
         ):
             selector_model = get_internal_selector_model(
                 self.references[reference_id]["annotations"], selector_id, True
             )
             if (
-                self.corrected_model["coordinate_system"] in ["c", "p"]
-                and selector_model.get("cds")
-                and len(selector_model["cds"]) > 1
-                and selector_model.get("exception")
-                and selector_model.get("exception") == "ribosomal slippage"
+                    self.corrected_model["coordinate_system"] in ["c", "p"]
+                    and selector_model.get("cds")
+                    and len(selector_model["cds"]) > 1
+                    and selector_model.get("exception")
+                    and selector_model.get("exception") == "ribosomal slippage"
             ):
                 self._add_error(
                     errors.cds_slices(
@@ -489,7 +497,7 @@ class Description(object):
     @check_errors
     def _correct_chromosome_points(self):
         for point, path in yield_sub_model(
-            self.corrected_model, ["location", "start", "end"], ["point"]
+                self.corrected_model, ["location", "start", "end"], ["point"]
         ):
             if point["position"] in ["pter", "qter"]:
                 ref_id = self.corrected_model["reference"]["id"]
@@ -535,7 +543,7 @@ class Description(object):
         )
 
         for point, path in yield_sub_model(
-            self.corrected_model, ["location", "start", "end"], ["point"]
+                self.corrected_model, ["location", "start", "end"], ["point"]
         ):
             internal = point_to_internal(point, crossmap_to)
             corrected = point_to_hgvs(internal, **crossmap_from)
@@ -621,11 +629,11 @@ class Description(object):
         if self.de_hgvs_internal_indexing_model:
             to_coordinate_system = self.corrected_model.get("coordinate_system")
             if (
-                self.corrected_model.get("coordinate_system") == "n"
-                and get_coordinate_system_from_selector_id(
-                    self.references["reference"], self.get_selector_id()
-                )
-                == "c"
+                    self.corrected_model.get("coordinate_system") == "n"
+                    and get_coordinate_system_from_selector_id(
+                self.references["reference"], self.get_selector_id()
+            )
+                    == "c"
             ):
                 to_coordinate_system = "c"
                 self.add_info(
@@ -634,8 +642,8 @@ class Description(object):
                     )
                 )
             if (
-                to_coordinate_system == "c"
-                and self.get_selector_model().get("cds") is None
+                    to_coordinate_system == "c"
+                    and self.get_selector_model().get("cds") is None
             ):
                 self._add_error(
                     errors.no_cds(
@@ -662,10 +670,10 @@ class Description(object):
     def construct_genomic_equivalent(self):
         from_model = self.de_hgvs_internal_indexing_model
         if (
-            get_coordinate_system_from_reference(self.references["reference"])
-            == "g"
-            != self.corrected_model["coordinate_system"]
-            and self.corrected_model["coordinate_system"] != "r"
+                get_coordinate_system_from_reference(self.references["reference"])
+                == "g"
+                != self.corrected_model["coordinate_system"]
+                and self.corrected_model["coordinate_system"] != "r"
         ):
             converted_model = to_hgvs_locations(
                 model=from_model,
@@ -688,10 +696,10 @@ class Description(object):
         equivalent = {}
 
         if (
-            get_coordinate_system_from_reference(self.references["reference"])
-            == "g"
-            != self.corrected_model["coordinate_system"]
-            and self.corrected_model["coordinate_system"] != "r"
+                get_coordinate_system_from_reference(self.references["reference"])
+                == "g"
+                != self.corrected_model["coordinate_system"]
+                and self.corrected_model["coordinate_system"] != "r"
         ):
             converted_model = to_hgvs_locations(
                 model=from_model,
@@ -758,9 +766,9 @@ class Description(object):
                         else:
                             e_d = {"description": converted_model}
                     if (
-                        selector.get("qualifiers")
-                        and selector["qualifiers"].get("tag")
-                        and "MANE" in selector["qualifiers"]["tag"]
+                            selector.get("qualifiers")
+                            and selector["qualifiers"].get("tag")
+                            and "MANE" in selector["qualifiers"]["tag"]
                     ):
                         e_d["tag"] = {
                             "id": selector["id"],
@@ -782,11 +790,11 @@ class Description(object):
     @check_errors
     def construct_protein_description(self):
         if self.de_hgvs_model.get("coordinate_system") == "c" or (
-            self.de_hgvs_model.get("coordinate_system") == "r"
-            and get_coordinate_system_from_selector_id(
-                self.references["reference"], self.get_selector_id()
-            )
-            == "c"
+                self.de_hgvs_model.get("coordinate_system") == "r"
+                and get_coordinate_system_from_selector_id(
+            self.references["reference"], self.get_selector_id()
+        )
+                == "c"
         ):
             if self.rna and self.rna.get("errors"):
                 self.protein = {"errors": self.rna["errors"]}
@@ -876,7 +884,7 @@ class Description(object):
 
     def _check_location_boundaries(self):
         for point, path in yield_sub_model(
-            self.internal_coordinates_model, ["location", "start", "end"], ["point"]
+                self.internal_coordinates_model, ["location", "start", "end"], ["point"]
         ):
             ref_id = "reference"
             for ins_or_del in ["inserted", "deleted"]:
@@ -907,7 +915,7 @@ class Description(object):
                             point - right_boundary + 1,
                             right_boundary,
                             path,
-                        )
+                            )
                     )
                 elif point < left_boundary:
                     if self.is_inverted():
@@ -922,11 +930,11 @@ class Description(object):
 
     def _check_location_range(self):
         for location, path in yield_sub_model(
-            self.internal_coordinates_model, ["location"], ["range"]
+                self.internal_coordinates_model, ["location"], ["range"]
         ):
             if (
-                not location["start"].get("uncertain")
-                and not location["end"].get("uncertain")
+                    not location["start"].get("uncertain")
+                    and not location["end"].get("uncertain")
             ) and get_start(location) > get_end(location):
                 self._add_error(errors.range_reversed(location, path))
 
@@ -968,7 +976,7 @@ class Description(object):
 
     def _check_location_extras(self):
         for point, path in yield_sub_model(
-            self.corrected_model, ["location", "start", "end"], ["point"]
+                self.corrected_model, ["location", "start", "end"], ["point"]
         ):
             self._check_genomic_point(point, path)
             self._check_intronic_point(point, path)
@@ -1037,8 +1045,8 @@ class Description(object):
                 self._add_error(errors.repeat_not_supported(v, path))
                 return
             ref_seq = self.references["reference"]["sequence"]["seq"][
-                get_start(v_i) : get_end(v_i)
-            ]
+                      get_start(v_i) : get_end(v_i)
+                      ]
             if self.is_inverted():
                 ref_seq = reverse_complement(ref_seq)
 
@@ -1066,16 +1074,16 @@ class Description(object):
         ins_or_del = path[-1]
         sequences = self.get_sequences()
         if (
-            len(v_i[ins_or_del]) == 1
-            and v_i[ins_or_del][0].get("length")
-            and v_i[ins_or_del][0]["length"].get("value")
+                len(v_i[ins_or_del]) == 1
+                and v_i[ins_or_del][0].get("length")
+                and v_i[ins_or_del][0]["length"].get("value")
         ):
             len_del = v_i[ins_or_del][0]["length"].get("value")
             len_loc = get_location_length(v_i["location"])
             if len_loc != len_del:
                 self._add_error(errors.length_mismatch(len_loc, len_del, path))
         elif get_start(v_i["location"]) >= 0 and get_end(v_i["location"]) <= len(
-            sequences["reference"]
+                sequences["reference"]
         ):
             seq_ref = slice_sequence(v_i["location"], sequences["reference"])
             seq_del = construct_sequence(v_i[ins_or_del], sequences)
@@ -1092,7 +1100,7 @@ class Description(object):
     @check_errors
     def _check_and_correct_sequences(self):
         for seq, path in yield_sub_model(
-            self.corrected_model, ["sequence", "amino_acid"]
+                self.corrected_model, ["sequence", "amino_acid"]
         ):
             if self.corrected_model.get("coordinate_system") in ["g", "c", "n", None]:
                 if seq.upper() != seq:
@@ -1124,13 +1132,13 @@ class Description(object):
     def _check_location_amino_acids(self):
         sequences = self.get_sequences()
         for point, path in yield_sub_model(
-            self.internal_coordinates_model, ["location", "start", "end"], ["point"]
+                self.internal_coordinates_model, ["location", "start", "end"], ["point"]
         ):
             ref_id = self._get_reference_id(self.internal_indexing_model, path)
             if (
-                point.get("amino_acid")
-                and point.get("position")
-                and sequences[ref_id][point["position"]] != point["amino_acid"]
+                    point.get("amino_acid")
+                    and point.get("position")
+                    and sequences[ref_id][point["position"]] != point["amino_acid"]
             ):
                 self._add_error(
                     errors.amino_acid_mismatch(
@@ -1179,8 +1187,8 @@ class Description(object):
             if v.get("type") == "repeat":
                 self._check_repeat(["variants", i])
         if (
-            is_overlap(self.internal_indexing_model["variants"])
-            or self._insertions_same_location()
+                is_overlap(self.internal_indexing_model["variants"])
+                or self._insertions_same_location()
         ):
             self._add_error(errors.overlap())
 
@@ -1203,7 +1211,7 @@ class Description(object):
             reference_part = get_submodel_by_path(self.corrected_model, path[:-1])
             new_reference_part = {"id": chromosome_id}
             if reference_part.get("selector") and reference_part["selector"].get(
-                "selector"
+                    "selector"
             ):
                 new_reference_part["selector"] = reference_part["selector"]["selector"]
             set_by_path(self.corrected_model, path[:-1], new_reference_part)
@@ -1235,11 +1243,11 @@ class Description(object):
 
     def remove_superfluous_selector(self):
         if (
-            not self.only_variants
-            and self.de_hgvs_model
-            and self.de_hgvs_model["reference"].get("selector")
-            and self.de_hgvs_model["reference"]["selector"]["id"]
-            == self.de_hgvs_model["reference"]["id"]
+                not self.only_variants
+                and self.de_hgvs_model
+                and self.de_hgvs_model["reference"].get("selector")
+                and self.de_hgvs_model["reference"]["selector"]["id"]
+                == self.de_hgvs_model["reference"]["id"]
         ):
             self.de_hgvs_model["reference"].pop("selector")
 
@@ -1272,7 +1280,7 @@ class Description(object):
 
     def _check_amino_acids(self):
         for sequence, path in yield_values(
-            self.corrected_model, ["sequence", "amino_acid"]
+                self.corrected_model, ["sequence", "amino_acid"]
         ):
             seq_1a = str(seq1(sequence))
             seq_3a = str(seq3(sequence))
@@ -1418,9 +1426,9 @@ class Description(object):
         ref_id = self._get_reference_id(self.corrected_model, [])
         if ref_id and ref_id.startswith("ENS"):
             if (
-                self.references.get("reference")
-                and self.references["reference"].get("annotations")
-                and self.references["reference"]["annotations"].get("qualifiers")
+                    self.references.get("reference")
+                    and self.references["reference"].get("annotations")
+                    and self.references["reference"]["annotations"].get("qualifiers")
             ):
                 offset = self.references["reference"]["annotations"]["qualifiers"].get("location_offset")
                 if self.de_hgvs_internal_indexing_model:
@@ -1433,11 +1441,11 @@ class Description(object):
         ref_id = self._get_reference_id(self.corrected_model, [])
         if ref_id and ref_id.startswith("ENS"):
             if (
-                self.references.get("reference")
-                and self.references["reference"].get("annotations")
-                and self.references["reference"]["annotations"].get("qualifiers")
-                and self.references["reference"]["annotations"]["qualifiers"].get("chromosome_number")
-                and self.references["reference"]["annotations"]["qualifiers"].get("assembly_name")
+                    self.references.get("reference")
+                    and self.references["reference"].get("annotations")
+                    and self.references["reference"]["annotations"].get("qualifiers")
+                    and self.references["reference"]["annotations"]["qualifiers"].get("chromosome_number")
+                    and self.references["reference"]["annotations"]["qualifiers"].get("assembly_name")
             ):
                 return get_assembly_chromosome_accession(
                     self.references["reference"]["annotations"]["qualifiers"]["assembly_name"],
@@ -1455,24 +1463,24 @@ class Description(object):
     def get_chromosomal_descriptions(self):
         # TODO: Add tests.
         if (
-            not self.references
-            or self.only_variants
-            or self.corrected_model.get("type") == "description_protein"
+                not self.references
+                or self.only_variants
+                or self.corrected_model.get("type") == "description_protein"
         ):
             return
         ref_id = get_reference_id(self.corrected_model)
         if (
-            ref_id
-            and get_reference_mol_type(self.references[ref_id]) == "mRNA"
-            and self.corrected_model["coordinate_system"] == "c"
-            and (ref_id.startswith("NM_") or ref_id.startswith("XM_"))
+                ref_id
+                and get_reference_mol_type(self.references[ref_id]) == "mRNA"
+                and self.corrected_model["coordinate_system"] == "c"
+                and (ref_id.startswith("NM_") or ref_id.startswith("XM_"))
         ):
             self.add_info(infos.mrna_genomic_tip())
         elif (
-            ref_id
-            and get_reference_mol_type(self.references[ref_id]) == "mRNA"
-            and self.corrected_model["coordinate_system"] == "r"
-            and (ref_id.startswith("NM_") or ref_id.startswith("XM_"))
+                ref_id
+                and get_reference_mol_type(self.references[ref_id]) == "mRNA"
+                and self.corrected_model["coordinate_system"] == "r"
+                and (ref_id.startswith("NM_") or ref_id.startswith("XM_"))
         ):
             return
         chromosome_accessions = get_chromosome_accession_from_mrna_model(
@@ -1531,7 +1539,7 @@ class Description(object):
                 )
 
                 if (not to_inverted and ref_seq_to != ref_seq_from) or (
-                    to_inverted and reverse_complement(ref_seq_to) != ref_seq_from
+                        to_inverted and reverse_complement(ref_seq_to) != ref_seq_from
                 ):
                     self.add_info(
                         infos.mrna_genomic_difference(ref_id, chromosome_accession)
